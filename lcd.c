@@ -79,10 +79,10 @@ void init_lcd (void)
 	lcd_spi_transmit('|'); //Enter settings mode
 	lcd_spi_transmit('-'); //clear display and reset cursor
 	
-	sprintf(dsp_buff1, "                    ");
-	sprintf(dsp_buff2, "                    ");
-	sprintf(dsp_buff3, "                    ");
-	sprintf(dsp_buff4, "                    ");
+	sprintf(dsp_buff[0], "                    ");
+	sprintf(dsp_buff[1], "                    ");
+	sprintf(dsp_buff[2], "                    ");
+	sprintf(dsp_buff[3], "                    ");
 }
 
 //***************************************************************************
@@ -104,10 +104,10 @@ void clear_lcd (void)
 	lcd_spi_transmit('|'); //Enter settings mode
 	lcd_spi_transmit('-'); //clear display and reset cursor
 	
-	sprintf(dsp_buff1, "                    ");
-	sprintf(dsp_buff2, "                    ");
-	sprintf(dsp_buff3, "                    ");
-	sprintf(dsp_buff4, "                    ");
+	sprintf(dsp_buff[0], "                    ");
+	sprintf(dsp_buff[1], "                    ");
+	sprintf(dsp_buff[2], "                    ");
+	sprintf(dsp_buff[3], "                    ");
 }
 
 void update_lcd(void);
@@ -132,25 +132,25 @@ void update_lcd(void)
 	
 	for (int i = 0; i < 20; i++)
 	{
-		lcd_spi_transmit(dsp_buff1[i]); //transmit each character of dsp_buff1
+		lcd_spi_transmit(dsp_buff[0][i]); //transmit each character of dsp_buff1
 	}
 
 	// send line 2 to the LCD module.
 	for (int i = 0; i < 20; i++)
 	{
-		lcd_spi_transmit(dsp_buff2[i]); //transmit each character of dsp_buff2
+		lcd_spi_transmit(dsp_buff[1][i]); //transmit each character of dsp_buff2
 	}
 
 	// send line 3 to the LCD module.
 	for (int i = 0; i < 20; i++)
 	{
-		lcd_spi_transmit(dsp_buff3[i]); //transmit each character of dsp_buff3
+		lcd_spi_transmit(dsp_buff[2][i]); //transmit each character of dsp_buff3
 	}
 	
 	// send line 4 to the LCD module.
 	for (int i = 0; i < 20; i++)
 	{
-		lcd_spi_transmit(dsp_buff4[i]); //transmit each character of dsp_buff4
+		lcd_spi_transmit(dsp_buff[3][i]); //transmit each character of dsp_buff4
 	}
 }
 
