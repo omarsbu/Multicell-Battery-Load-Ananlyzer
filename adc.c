@@ -120,7 +120,12 @@ uint8_t ADC_isConversionDone(void)
 //**************************************************************************
 uint16_t ADC_read(void)
 {
-	return ADC0.RES;	// Reading result clears interrupt flag
+	ADC_startConversion();
+	while(ADC_isConversionDone() != 0x01) ;
+	ADC_stopConversion();
+
+	// 12 bit result was left adjusted, so shift right 4 places to fix
+	return (ADC0.RES >> 4);	// Reading result clears interrupt flag
 }
 
 //***************************************************************************
