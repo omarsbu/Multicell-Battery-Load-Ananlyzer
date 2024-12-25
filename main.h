@@ -10,10 +10,7 @@
 #define MAIN_H_
 
 // Display buffer for DOG LCD using sprintf()
-char dsp_buff1[21];
-char dsp_buff2[21];
-char dsp_buff3[21];
-char dsp_buff4[21];
+char dsp_buff[4][21];
 
 /*Global variable Declarations*/
 volatile uint16_t adc_value;		// Integer value read from ADC
@@ -61,15 +58,5 @@ float load_current_Read(void);
 // Fan Functions
 void Fan_PWM_init(void);
 void set_Fan_PWM(uint8_t duty);
-
-// Local Interface Functions
-void UP_ISR(void);
-void DOWN_ISR(void);
-void BACK_ISR(void);
-void OK_ISR(void);
-
-void display_MAIN_MENU(void);
-void display_MESSAGE1(void);	/* Prompt user to rotate knob clockwise until beeping indicates 500A */
-void display_MESSAGE2(void);	/* Prompt user to rotate knob counter-clockwise until beeping stops */
 
 #endif /* MAIN_H_ */
