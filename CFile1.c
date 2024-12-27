@@ -152,7 +152,6 @@ void main_menu_fsm(void)
 			else if (cursor == 2) 
 			{
 				/* Update program state variables */
-				PB_PRESS = NONE;	// Clear pushbutton state
 				LOCAL_INTERFACE_CURRENT_STATE = VIEW_HISTORY_STATE;
 				VIEW_HISTORY_CURRENT_STATE = SCROLL_PREVIOUS_RESULTS;
 				view_history_fsm();	// Enter view history fsm
@@ -233,7 +232,7 @@ void test_fsm(void)
 // Determines whether or not a battery is connected to the load analyzer. 
 //	If the voltage across the battery inputs is less than 100mV, then no
 //	battery is connected. This function must be called before entering the 
-//	TEST_FSM because it sets the initial state to ERROR or TESTING
+//	TEST_FSM because it determines the initial state: ERROR or TESTING
 //
 // Inputs : none
 //
@@ -242,11 +241,13 @@ void test_fsm(void)
 //**************************************************************************
 void is_battery_connected(void)
 {
-	/* Read total battery pack voltage with single-ended measurement */
-	ADC_init(0x00);
-	ADC_channelSEL(B4_ADC_CHANNEL, GND_ADC_CHANNEL);
-	float voltage = ADC_read() * battery_voltage_divider_ratios;
-			
+	/* Function sets the test state to ERROR or TESTING */
+	ADC0.MUXPOS = 0x03; // ADC input pin AIN3, 13.2V input
+	ADC0.MUXNEG = 0x40; // GND
+	
+	// Read total battery pack voltage
+	float voltage = (float)(((battery_voltage_divider_ratios)*adc_vref)*(ADC_read()/2048));
+	
 	// If voltage < 100mV, there is no battery connection move to ERROR state, otherwise procede with test
 	if (voltage < 0.1)
 		TEST_FSM_STATES = ERROR;	// Move to ERROR state
@@ -700,8 +701,7 @@ void display_quad_pack_entries(void)
 {
 	clear_lcd();
 	
-	/* display cursor on same line as quad pack entry */
-	sprintf(dsp_buff[cursor - 1], "Quad pack %d   <-", quad_pack_entry + 1);
+	sprintf(dsp_buff[cursor - 1], "Quad pack %d <-", quad_pack_entry + 1);	// display cursor on same line as quad pack entry
 	
 	uint8_t entries_above_cursor = cursor - 1;	// number of quad pack entries to be displayed above the cursor line
 	uint8_t entries_below_cursor = 4 - cursor;	// number of quad pack entries to be displayed below the cursor line
@@ -728,7 +728,7 @@ void display_quad_pack_entries(void)
 			quad_pack_display += 13;	// If value is < 0, add 13 to ensure that display number 'rolls over' circularly
 		
 		sprintf(dsp_buff[cursor - entries_above_cursor - 1], "Quad pack %d", quad_pack_display);
-		entries_above_cursor--;	// move down 1 line until the cursor line is reached
+		entries_above_cursor--;	// move down 1 line until the cursor is reached
 	}	
 	
 	update_lcd();	

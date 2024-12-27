@@ -1,10 +1,3 @@
-/*
- * adc.c
- *
- * Created: 12/18/2024 4:01:07 PM
- *  Author: tyler
- */ 
-
 #include <avr/io.h>
 #define F_CPU 4000000UL
 #include <util/delay.h>
@@ -17,24 +10,26 @@
 // Function Name : "ADC_init"
 // Target MCU : AVR128DB48
 // DESCRIPTION
-// Initializes the ADC0 module of the AVR128DB48 for differential
-// mode, VDD reference, 12-bit resolution, free-run mode, 16
-// sample accumulation, and clock prescalar divided by 4.
+// Initializes the ADC0 module of the AVR128DB48 for differential or
+// single-ended mode, VDD reference, 12-bit resolution, free-run mode,
+// 16 sample accumulation, and clock prescalar divided by 4.
 // Enables interrupts and ADC0 module.
 //
-// Inputs : None
+// Inputs : 
+//		uint8_t mode: 0 -> single ended, 1 -> differential
 //
 // Outputs : None
 //
-//
 //**************************************************************************
-void ADC_init(void)
+void ADC_init(uint8_t mode)
 {
+	adc_mode = mode;
+	
 	// Use VDD as reference
 	VREF.ADC0REF = VREF_REFSEL_VDD_gc;
 	
-	// 12-bit resolution, Free-Run mode, Differential mode, Right adjusted, Enable
-	ADC0.CTRLA = (ADC_RESSEL_12BIT_gc | ADC_FREERUN_bm | ADC_CONVMODE_bm | ADC_ENABLE_bm);
+	// 12-bit resolution, Free-Run mode, differential or single-ended, Right adjusted, Enable
+	ADC0.CTRLA = (ADC_RESSEL_12BIT_gc | ADC_FREERUN_bm | (adc_mode << 5) | ADC_ENABLE_bm);
 
 	//enables interrupt
 	ADC0.INTCTRL |= ADC_RESRDY_bm;
@@ -44,7 +39,6 @@ void ADC_init(void)
 	
 	// Divided CLK_PER by 4
 	ADC0.CTRLC = ADC_PRESC_DIV4_gc;
-	
 }
 
 //***************************************************************************
@@ -109,23 +103,27 @@ uint8_t ADC_isConversionDone(void)
 // Function Name : "ADC_read"
 // Target MCU : AVR128DB48
 // DESCRIPTION
-// Returns the digital value converted by the ADC
+//	Reads an integer value from the ADC and converts it to a floating point
+//	voltage based on reference voltage and conversion resolution
 //
 // Inputs : None
 //
-// Outputs : uint16_t result: the 16 bit conversion result from the
-// result register of the ADC
-//
+// Outputs : 
+//		float result: A floating point voltage converted by the ADC
 //
 //**************************************************************************
-uint16_t ADC_read(void)
+float ADC_read(void)
 {
+	/* Perform ADC conversion */
 	ADC_startConversion();
-	while(ADC_isConversionDone() != 0x01) ;
+	while(ADC_isConversionDone() != 0x01);	// wait for conversion to finish
 	ADC_stopConversion();
-
-	// 12 bit result was left adjusted, so shift right 4 places to fix
-	return (ADC0.RES >> 4);	// Reading result clears interrupt flag
+	
+	/* 12 bit result was left adjusted, so shift right 4 places to fix, reading ADC.RES clears interrupt flag */
+	if (adc_mode == 0x00)		
+		return (float)( adc_vref * (ADC0.RES >> 4) / 4096);	// single-ended resolution is 12 bits -> 4096 values
+	else
+		return (float)( adc_vref * (ADC0.RES >> 4) / 2048);	// differential resolution is 11 bits -> 2048 values
 }
 
 //***************************************************************************
@@ -134,33 +132,27 @@ uint16_t ADC_read(void)
 // Target MCU : AVR128DB48
 // DESCRIPTION
 // Selects 1 (single ended mode) or 2 channels (differential mode)
-// for ADC0 to read the voltage from
+//	for ADC0 to read the voltage from
 //
-// Inputs : uint8_t channel_sel: represents the channel to be
-// read (for differential mode, this is the lower of the two channels
-// to be read)
+// Inputs : 
+//		uint8_t AIN_POS: Positive differential or single-ended input
+//		uint8_t AIN_NEG: Negative differential input
 //
 // Outputs : None
 //
 //
 //**************************************************************************
-void ADC_channelSEL(uint8_t channel_sel)
+void ADC_channelSEL(uint8_t AIN_POS, uint8_t AIN_NEG)
 {
-	/* If differential mode -> write both MUXPOS and MUXNEG registers, otherwise only write MUXPOS register */
-	if (adc_mux_mode == 0x01)// if differential mode
+	/* In differential mode, write both MUXPOS and MUXNEG registers */
+	if (adc_mode == 0x01)
 	{
-		ADC0.MUXPOS = channel_sel;
-		if(channel_sel == 0 || channel_sel == 3)
-		{
-			ADC0.MUXNEG = channel_sel + 2;
-		}
-		else
-		{
-			ADC0.MUXNEG = channel_sel + 1;
-		}
+		ADC0.MUXPOS = AIN_POS;
+		ADC0.MUXNEG = AIN_NEG;
 	}
-	else// single-ended mode
-	ADC0.MUXPOS = channel_sel;
+	/* In single-ended mode, only write MUXPOS register */
+	else
+		ADC0.MUXPOS = AIN_POS;
 }
 
 //***************************************************************************
@@ -179,14 +171,30 @@ void ADC_channelSEL(uint8_t channel_sel)
 //
 //
 //**************************************************************************
-float batteryCell_read(uint8_t channel_sel)
+float batteryCell_read(uint8_t BAT_POS, uint8_t BAT_NEG)
 {
-	ADC_channelSEL(channel_sel);
-	ADC_startConversion();
-	while(ADC_isConversionDone() != 0x01) ;
-	ADC_stopConversion();
-	adc_value = ADC_read();
-	adc_value = adc_value >> 4;//the 12 bit result was left adjusted, so shift right 4 places to fix
-	return (float)(((float)adc_value / 2048) * adc_vref * battery_voltage_divider_ratios); //finds Vpos - Vneg
+	/* Put ADC in differential mode and select POS and NEG inputs*/
+	ADC_init(0x01);	
+	ADC_channelSEL(BAT_POS, BAT_NEG);
+	
+	/* Multiply by voltage divider ratio to undo attenuation */
+	return (float) (ADC_read() * battery_voltage_divider_ratios);
 }
 
+void read_UNLOADED_battery_voltages(void)
+{
+	/* Read voltage of each cell and store in array when unloaded */
+	UNLOADED_battery_voltages[0] = batteryCell_read(B1_ADC_CHANNEL, GND_ADC_CHANNEL);	// B1_POS - GND
+	UNLOADED_battery_voltages[1] = batteryCell_read(B2_ADC_CHANNEL, B1_ADC_CHANNEL);	// B2_POS - B1_POS
+	UNLOADED_battery_voltages[2] = batteryCell_read(B3_ADC_CHANNEL, B2_ADC_CHANNEL);	// B3_POS - B2_POS
+	UNLOADED_battery_voltages[3] = batteryCell_read(B4_ADC_CHANNEL, B3_ADC_CHANNEL);	// B4_POS - B3_POS
+}
+
+void read_LOADED_battery_voltages(void)
+{
+	/* Read voltage of each cell and store in array once load current reaches 500A */
+	LOADED_battery_voltages[0] = batteryCell_read(B1_ADC_CHANNEL, GND_ADC_CHANNEL);	// B1_POS - GND
+	LOADED_battery_voltages[1] = batteryCell_read(B2_ADC_CHANNEL, B1_ADC_CHANNEL);	// B2_POS - B1_POS
+	LOADED_battery_voltages[2] = batteryCell_read(B3_ADC_CHANNEL, B2_ADC_CHANNEL);	// B3_POS - B2_POS
+	LOADED_battery_voltages[3] = batteryCell_read(B4_ADC_CHANNEL, B3_ADC_CHANNEL);	// B4_POS - B3_POS
+}

@@ -1,10 +1,3 @@
-/*
- * opamp.c
- *
- * Created: 12/18/2024 4:01:59 PM
- *  Author: Omar
- */ 
-
 #include <avr/io.h>
 #define F_CPU 4000000UL
 #include <util/delay.h>
@@ -103,37 +96,32 @@ void OPAMP_Instrumentation_init(void)
 }
 
 float load_current_Read(void)
-{
-	/* Select OP2 output as ADC input */
-	ADC0.MUXPOS = 0x0A; // ADC input pin AIN10, OPAMP OP2 output
-	ADC0.MUXNEG = 0x40; // GND
-
-	/* Perform ADC conversion */
-	ADC_startConversion();
-	while(ADC_isConversionDone() != 0x01);	// wait for conversion to finish
-	ADC_stopConversion();
-	adc_value = ADC_read();
-	adc_value = adc_value >> 4;//the 12 bit result was left adjusted, so shift right 4 places to fix
+{	
+	/* Put ADC in single-ended mode and select OP2 output */
+	ADC_init(0x00);
+	ADC_channelSEL(OPAMP_ADC_CHANNEL, GND_ADC_CHANNEL);
+	adc_value = ADC_read();		
+	uint8_t gain = get_OPAMP_gain();
 	
-	/* Convert ADC voltage to current, only accurate if load current is between 100A - 500A */
+	/* Multiply by divider ratio to undo attenuation, divide by gain to undo gain, divide by resistance to convert to amps */
+	load_current_amps = ((adc_value*current_sensing_voltage_divider_ratios) / (gain*shunt_resistance_ohms));	
+	return load_current_amps;
+}
+
+float get_OPAMP_gain(void)
+{
 	/* Measure instrumentation amplifier gain versus output voltage and store in array, start
 	   at largest gain in array and loop back to lowest gain, comparing the value read on each 
 	   iteration. The entry in the array will correspond to a incremental gain of some
 	   value that is not determined yet.
-	   
+	*/   
+	
 		for (uint8_t i = 10; i >= 0; i--)
 		{
-			if ((adc_vref*(adc_value/2048)) >= OPAMP_voltage_versus_gain[i])
+			if (adc_value >= OPAMP_voltage_versus_gain[i])
 			{
 				gain = minimum_OPAMP_gain + i*OPAMP_gain_increment;
 				break;
 			}
-		}
-	*/	
-
-	uint8_t gain = 15;	// default value, change later
-	load_current = current_sensing_voltage_divider_ratios*((float)((((float)adc_value / 2048) * adc_vref)/(gain*shunt_resistance_ohms)));
-	
-	return load_current;
+		}	
 }
-

@@ -1,10 +1,3 @@
-/*
- * lcd.c
- *
- * Created: 12/18/2024 4:01:41 PM
- *  Author: tyler
- */ 
-
 #include <avr/io.h>
 #define F_CPU 4000000UL
 #include <util/delay.h>
@@ -79,10 +72,8 @@ void init_lcd (void)
 	lcd_spi_transmit('|'); //Enter settings mode
 	lcd_spi_transmit('-'); //clear display and reset cursor
 	
-	sprintf(dsp_buff[0], "                    ");
-	sprintf(dsp_buff[1], "                    ");
-	sprintf(dsp_buff[2], "                    ");
-	sprintf(dsp_buff[3], "                    ");
+	for (uint8_t i = 0; i < 4; i++)
+		sprintf(dsp_buff[i], "                    ");
 }
 
 //***************************************************************************
@@ -101,13 +92,11 @@ void init_lcd (void)
 //**************************************************************************
 void clear_lcd (void)
 {
-	lcd_spi_transmit('|'); //Enter settings mode
-	lcd_spi_transmit('-'); //clear display and reset cursor
+	lcd_spi_transmit('|'); // Enter settings mode
+	lcd_spi_transmit('-'); // clear display and reset cursor
 	
-	sprintf(dsp_buff[0], "                    ");
-	sprintf(dsp_buff[1], "                    ");
-	sprintf(dsp_buff[2], "                    ");
-	sprintf(dsp_buff[3], "                    ");
+	for (uint8_t i = 0; i < 4; i++)
+		sprintf(dsp_buff[i], "                    ");
 }
 
 void update_lcd(void);
@@ -127,30 +116,13 @@ void update_lcd(void);
 //**************************************************************************
 void update_lcd(void)
 {
-
-	// send line 1 to the LCD module.
-	
-	for (int i = 0; i < 20; i++)
+	/* Outer loop transmits all 4 lines of LCD */
+	for (uint8_t i = 0; i < 4; i++)
 	{
-		lcd_spi_transmit(dsp_buff[0][i]); //transmit each character of dsp_buff1
-	}
-
-	// send line 2 to the LCD module.
-	for (int i = 0; i < 20; i++)
-	{
-		lcd_spi_transmit(dsp_buff[1][i]); //transmit each character of dsp_buff2
-	}
-
-	// send line 3 to the LCD module.
-	for (int i = 0; i < 20; i++)
-	{
-		lcd_spi_transmit(dsp_buff[2][i]); //transmit each character of dsp_buff3
-	}
-	
-	// send line 4 to the LCD module.
-	for (int i = 0; i < 20; i++)
-	{
-		lcd_spi_transmit(dsp_buff[3][i]); //transmit each character of dsp_buff4
-	}
+		/* Inner loop transmit each character of line i */
+		for (uint8_t j = 0; j < 20; j++)
+		{
+			lcd_spi_transmit(dsp_buff[i][j]); 	
+		}
 }
 
