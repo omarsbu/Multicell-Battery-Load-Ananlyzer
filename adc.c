@@ -23,12 +23,12 @@
 //**************************************************************************
 void ADC_init(uint8_t mode)
 {
-	adc_mode = mode;
+	adc_mode = mode;	// single-ended or differential mode
 	
 	// Use VDD as reference
 	VREF.ADC0REF = VREF_REFSEL_VDD_gc;
 	
-	// 12-bit resolution, Free-Run mode, differential or single-ended, Right adjusted, Enable
+	// 12-bit resolution, Free-Run mode, differential/single-ended, Right adjusted, Enable
 	ADC0.CTRLA = (ADC_RESSEL_12BIT_gc | ADC_FREERUN_bm | (adc_mode << 5) | ADC_ENABLE_bm);
 
 	//enables interrupt
@@ -74,7 +74,7 @@ void ADC_startConversion(void)
 //**************************************************************************
 void ADC_stopConversion(void)
 {
-	ADC0.COMMAND = ADC_SPCONV_bm;// stops ADC conversion
+	ADC0.COMMAND = ADC_SPCONV_bm;	// stops ADC conversion
 }
 
 //***************************************************************************
@@ -95,37 +95,8 @@ void ADC_stopConversion(void)
 //**************************************************************************
 uint8_t ADC_isConversionDone(void)
 {
-	return (ADC0.INTFLAGS & ADC_RESRDY_bm);//checks if RESRDY bit is set
+	return (ADC0.INTFLAGS & ADC_RESRDY_bm);	//checks if RESRDY bit is set
 }
-
-//***************************************************************************
-//
-// Function Name : "ADC_read"
-// Target MCU : AVR128DB48
-// DESCRIPTION
-//	Reads an integer value from the ADC and converts it to a floating point
-//	voltage based on reference voltage and conversion resolution
-//
-// Inputs : None
-//
-// Outputs : 
-//		float result: A floating point voltage converted by the ADC
-//
-//**************************************************************************
-float ADC_read(void)
-{
-	/* Perform ADC conversion */
-	ADC_startConversion();
-	while(ADC_isConversionDone() != 0x01);	// wait for conversion to finish
-	ADC_stopConversion();
-	
-	/* 12 bit result was left adjusted, so shift right 4 places to fix, reading ADC.RES clears interrupt flag */
-	if (adc_mode == 0x00)		
-		return (float)( adc_vref * (ADC0.RES >> 4) / 4096);	// single-ended resolution is 12 bits -> 4096 values
-	else
-		return (float)( adc_vref * (ADC0.RES >> 4) / 2048);	// differential resolution is 11 bits -> 2048 values
-}
-
 //***************************************************************************
 //
 // Function Name : "ADC_channelSEL"
@@ -154,7 +125,33 @@ void ADC_channelSEL(uint8_t AIN_POS, uint8_t AIN_NEG)
 	else
 		ADC0.MUXPOS = AIN_POS;
 }
-
+//***************************************************************************
+//
+// Function Name : "ADC_read"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+//	Reads an integer value from the ADC and converts it to a floating point
+//	voltage based on reference voltage and conversion resolution
+//
+// Inputs : None
+//
+// Outputs : 
+//		float result: A floating point voltage converted by the ADC
+//
+//**************************************************************************
+float ADC_read(void)
+{
+	/* Perform ADC conversion */
+	ADC_startConversion();
+	while(ADC_isConversionDone() != 0x01);	// wait for conversion to finish
+	ADC_stopConversion();
+	
+	/* 12 bit result was left adjusted, so shift right 4 places to fix, reading ADC.RES clears interrupt flag */
+	if (adc_mode == 0x00)		
+		return (float)( adc_vref * (ADC0.RES >> 4) / 4096);	// single-ended resolution is 12 bits -> 4096 values
+	else
+		return (float)( adc_vref * (ADC0.RES >> 4) / 2048);	// differential resolution is 11 bits -> 2048 values
+}
 //***************************************************************************
 //
 // Function Name : "batteryCell_read"
@@ -164,11 +161,12 @@ void ADC_channelSEL(uint8_t AIN_POS, uint8_t AIN_NEG)
 // reads the result, and converts the result back to an
 // analog voltage
 //
-// Inputs : uint8_t channel_sel: the battery in the quad pack to be
-// read
+// Inputs : 
+//	uint8_t BAT_POS: Positive battery terminal
+//	uint8_t BAT_NEG: Negative battery terminal
 //
-// Outputs : float adc_value: the analog voltage of the battery
-//
+// Outputs :
+//	float result: the analog voltage across the battery
 //
 //**************************************************************************
 float batteryCell_read(uint8_t BAT_POS, uint8_t BAT_NEG)
@@ -180,7 +178,19 @@ float batteryCell_read(uint8_t BAT_POS, uint8_t BAT_NEG)
 	/* Multiply by voltage divider ratio to undo attenuation */
 	return (float) (ADC_read() * battery_voltage_divider_ratios);
 }
-
+//***************************************************************************
+//
+// Function Name : "read_UNLOADED_battery_voltages"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+//  Reads the voltage across each battery cell input and stores the results 
+//	in the UNLOADED_battery_voltgaes array
+// Inputs : none
+//
+// Outputs : none
+//
+//
+//**************************************************************************
 void read_UNLOADED_battery_voltages(void)
 {
 	/* Read voltage of each cell and store in array when unloaded */
@@ -189,7 +199,19 @@ void read_UNLOADED_battery_voltages(void)
 	UNLOADED_battery_voltages[2] = batteryCell_read(B3_ADC_CHANNEL, B2_ADC_CHANNEL);	// B3_POS - B2_POS
 	UNLOADED_battery_voltages[3] = batteryCell_read(B4_ADC_CHANNEL, B3_ADC_CHANNEL);	// B4_POS - B3_POS
 }
-
+//***************************************************************************
+//
+// Function Name : "read_LOADED_battery_voltages"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+//  Reads the voltage across each battery cell input and stores the results
+//	in the LOADED_battery_voltgaes array
+// Inputs : none
+//
+// Outputs : none
+//
+//
+//**************************************************************************
 void read_LOADED_battery_voltages(void)
 {
 	/* Read voltage of each cell and store in array once load current reaches 500A */

@@ -5,6 +5,18 @@
 #include <avr/interrupt.h>
 #include "main.h"
 
+//***************************************************************************
+//
+// Function Name : "Fan_PWM_init"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function initializes the timer counter module for PWM output on PB0
+//
+// Inputs : none
+//
+// Outputs : none
+//
+//**************************************************************************
 void Fan_PWM_init(void)
 {
 	// Enable TCA0 and set PWM frequency = 25kHz
@@ -21,11 +33,22 @@ void Fan_PWM_init(void)
 	// Configure PB0 pin for PWM output
 	PORTC.DIR |= PIN0_bm;
 }
-
+//***************************************************************************
+//
+// Function Name : "set_Fan_PWM"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function sets the compare value for the PWM counter.
+//
+// Inputs : none
+//		uint8_t duty: Duty cycle as a percentage out of 100
+//
+// Outputs : none
+//
+//**************************************************************************
 void set_Fan_PWM(uint8_t duty)
 {
-	// Duty Cycle = [100 - 100*[TOP - CMP]/TOP] %
-	// CMP value = duty*(TOP/100)
-	TCA0.SINGLE.CMP0BUF = duty * 1.6;
+	/* Duty Cycle [%] = [100 - 100*[TOP - CMP]/TOP] */
+	TCA0.SINGLE.CMP0BUF = duty * 1.6;	// CMP value = duty*(TOP/100)
 }
 

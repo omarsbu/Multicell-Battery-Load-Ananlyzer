@@ -5,6 +5,19 @@
 #include <avr/interrupt.h>
 #include "main.h"
 
+//***************************************************************************
+//
+// Function Name : "OPAMP_Instrumentation_init"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function configures the 3 internal op amps as an instrumentation
+//  amplifier with a gain defined in the main file
+//
+// Inputs : none
+//
+// Outputs : none
+//
+//**************************************************************************
 void OPAMP_Instrumentation_init(void)
 {
 	// DBGRUN disabled;
@@ -94,7 +107,20 @@ void OPAMP_Instrumentation_init(void)
 	// Enable
 	OPAMP.CTRLA |= OPAMP_ENABLE_bm;
 }
-
+//***************************************************************************
+//
+// Function Name : "OPAMP_Instrumentation_init"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function reads output of the instrumentation amplifier and converts
+//	it to a current based on the shunt resistance value.
+//
+// Inputs : none
+//
+// Outputs : none
+//		float load_current: Analog Load current through shunt in amps
+//
+//**************************************************************************
 float load_current_Read(void)
 {	
 	/* Put ADC in single-ended mode and select OP2 output */
@@ -107,7 +133,21 @@ float load_current_Read(void)
 	load_current_amps = ((adc_value*current_sensing_voltage_divider_ratios) / (gain*shunt_resistance_ohms));	
 	return load_current_amps;
 }
-
+//***************************************************************************
+//
+// Function Name : "OPAMP_Instrumentation_init"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+//  The gain of the instrumentation amplifier is not exactly the value
+//   that is programmed. Experimentally determined array of output voltage
+//	 versus gain is used to calculate actual gain based on its output voltage.
+//
+// Inputs : none
+//
+// Outputs : 
+//		float gain: Approximate actual gain of instrumentation amplifier
+//
+//**************************************************************************
 float get_OPAMP_gain(void)
 {
 	/* Measure instrumentation amplifier gain versus output voltage and store in array, start
@@ -115,13 +155,17 @@ float get_OPAMP_gain(void)
 	   iteration. The entry in the array will correspond to a incremental gain of some
 	   value that is not determined yet.
 	*/   
-	
+/*	
 		for (uint8_t i = 10; i >= 0; i--)
 		{
 			if (adc_value >= OPAMP_voltage_versus_gain[i])
 			{
-				gain = minimum_OPAMP_gain + i*OPAMP_gain_increment;
+				gain = minimum_OPAMP_gain[0] + i*OPAMP_gain_increment;
 				break;
 			}
 		}	
+		
+		return gain;*/
+	
+	return OPAMP_gain;	// Place Holder until we populate the OPAMP_voltage_versus_gain array with experimentally determined values.
 }

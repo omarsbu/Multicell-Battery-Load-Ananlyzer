@@ -72,8 +72,15 @@ void init_lcd (void)
 	lcd_spi_transmit('|'); //Enter settings mode
 	lcd_spi_transmit('-'); //clear display and reset cursor
 	
+	/* Outer loop for each line */
 	for (uint8_t i = 0; i < 4; i++)
-		sprintf(dsp_buff[i], "                    ");
+	{
+		/* Inner loop for each character */
+		for (uint8_t j = 0; j < 20; j++)
+		{
+			dsp_buff[i][j] = " ";
+		}
+	}
 }
 
 //***************************************************************************
@@ -94,10 +101,18 @@ void clear_lcd (void)
 {
 	lcd_spi_transmit('|'); // Enter settings mode
 	lcd_spi_transmit('-'); // clear display and reset cursor
-	
+
+	/* Outer loop for each line */
 	for (uint8_t i = 0; i < 4; i++)
-		sprintf(dsp_buff[i], "                    ");
+	{
+		/* Inner loop for each character */
+		for (uint8_t j = 0; j < 20; j++)
+		{
+			dsp_buff[i][j] = " ";
+		}
+	}
 }
+
 
 void update_lcd(void);
 //***************************************************************************
@@ -124,5 +139,5 @@ void update_lcd(void)
 		{
 			lcd_spi_transmit(dsp_buff[i][j]); 	
 		}
+	}
 }
-

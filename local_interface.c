@@ -115,6 +115,8 @@ void LOCAL_INTERFACE_FSM(void)
 			main_menu_fsm();
 			break;
 	}
+	
+	PB_PRESS = NONE;	// Clear pushbutton state after it is handled
 	return;
 }
 //***************************************************************************
@@ -143,22 +145,23 @@ void main_menu_fsm(void)
 			{
 				/* Update program state variables and initiate test */
 				LOCAL_INTERFACE_CURRENT_STATE = TEST_STATE;
-				// check whether to display error message or proceed with test fsm
-				// this functIon will set TEST_CURRENT_STATE to either ERROR or TESTING
-				is_battery_connected();	
+				
+				/* check whether to display error message or proceed with test fsm */
+				is_battery_connected();	// initializes TEST_CURRENT_STATE to either ERROR or TESTING
+				PB_PRESS = NONE;	// Clear pushbutton state before transitioning to new fsm
 				test_fsm();	// Enter test fsm
 			}
 			/* OK PB pressed while cursor was on 'View History' option */
 			else if (cursor == 2) 
 			{
 				/* Update program state variables */
-				PB_PRESS = NONE;	// Clear pushbutton state
 				LOCAL_INTERFACE_CURRENT_STATE = VIEW_HISTORY_STATE;
-				VIEW_HISTORY_CURRENT_STATE = SCROLL_PREVIOUS_RESULTS;
+				VIEW_HISTORY_CURRENT_STATE = SCROLL_PREVIOUS_RESULTS;	// initialize fsm state
+				PB_PRESS = NONE;	// Clear pushbutton state before transitioning to new fsm
 				view_history_fsm();	// Enter view history fsm
 			}
 			break;
-		case BACK:	// do nothing
+		case BACK:
 			asm volatile ("nop");	// do nothing
 			break;
 		case UP:
@@ -174,9 +177,38 @@ void main_menu_fsm(void)
 			break;
 	}
 
-	PB_PRESS = NONE;	// Clear pushbutton state after it is handled
 	return;
 }
+//***************************************************************************
+//
+// Function Name : "view_history_fsm"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// View History finite state machine. This finite state machine is 
+// responsible for scrolling through and displaying previous test results.
+//
+// Inputs : none
+//
+// Outputs : none
+//
+//**************************************************************************
+void view_history_fsm(void)
+{
+	switch (VIEW_HISTORY_CURRENT_STATE)
+	{
+		case SCROLL_PREVIOUS_RESULTS:
+			scroll_previous_entries(PB_PRESS);
+			break;
+		case DISPLAY_PREVIOUS_RESULTS:
+			display_test_results(PB_PRESS, HISTORY_LOADED_battery_voltages[quad_pack_entry], HISTORY_UNLOADED_battery_voltages[quad_pack_entry]);
+			break;
+		default:
+			break;
+	}
+
+	return;
+}
+
 //***************************************************************************
 //
 // Function Name : "test_fsm"
@@ -198,31 +230,30 @@ void test_fsm(void)
 	switch (TEST_CURRENT_STATE)
 	{
 		case ERROR:
-			display_error_message();
+			display_error_message(PB_PRESS);
 			break;
 		case TESTING:
 			perform_test();
 			break;
 		case DISPLAY_RESULTS:
-			display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+			display_test_results(PB_PRESS, LOADED_battery_voltages, UNLOADED_battery_voltages);
 			break;
 		case DISCARD_RESULTS:
-			discard_test_results();
+			discard_test_results(PB_PRESS);
 			break;
 		case SAVE_CURRENT_RESULTS:
-			save_test_results();
+			save_test_results(PB_PRESS);
 			break;
 		case SCROLL_SAVE_ENTRIES:
-			scroll_previous_entries();
+			scroll_previous_entries(PB_PRESS);
 			break;
 		case OVERWRITE_RESULTS:
-			overwrite_previous_results();
+			overwrite_previous_results(PB_PRESS);
 			break;
 		default:
 			break;
 	}
 
-	PB_PRESS = NONE;	// Clear pushbutton state after it is handled
 	return;
 }
 //***************************************************************************
@@ -247,13 +278,13 @@ void is_battery_connected(void)
 	ADC_channelSEL(B4_ADC_CHANNEL, GND_ADC_CHANNEL);
 	float voltage = ADC_read() * battery_voltage_divider_ratios;
 			
-	// If voltage < 100mV, there is no battery connection move to ERROR state, otherwise procede with test
+	/* If voltage < 0.1V, no battery connection -> move to ERROR state */
 	if (voltage < 0.1)
-		TEST_FSM_STATES = ERROR;	// Move to ERROR state
+		TEST_CURRENT_STATE = ERROR;	// Move to ERROR state
+	/* Otherwise proceed with test */
 	else
-		TEST_FSM_STATES = TESTING;	// Proceed with TEST
+		TEST_CURRENT_STATE = TESTING;	// Proceed with TEST
 
-	PB_PRESS = NONE;	// clear PB press
 	return;
 }
 //***************************************************************************
@@ -265,22 +296,23 @@ void is_battery_connected(void)
 //  to the load analyzer. This function exits the ERROR state once the OK
 //  or BACK pushbuttons are pressed.
 //
-// Inputs : none
+// Inputs :
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void display_error_message (void)
+void display_error_message (PB_INPUT_TYPE pb_type)
 {
-	/* Return to main menu if OK or BACK PB is pressed, display ERROR message otherwise */
-	if (PB_PRESS = OK || PB_PRESS = BACK)
+	/* Return to main menu if OK or BACK PB is pressed */
+	if (pb_type == OK || pb_type == BACK)
 	{		
-		PB_PRESS = NONE;	// clear PB press
 		cursor = 1;		// Initialize cursor to line 1
 		quad_pack_entry = 0;	// Initialize quad pack entry to quad pack 1
 		LOCAL_INTERFACE_CURRENT_STATE = MAIN_MENU_STATE;
 		display_main_menu();
 	}
+	/* Display Error message otherwise */
 	else
 	{
 		sprintf(dsp_buff[0], "Failed! Ensure");
@@ -315,7 +347,7 @@ void perform_test(void)
 	clear_lcd();
 	sprintf(dsp_buff[0], "Rotate Knob until"); 
 	sprintf(dsp_buff[1], "beeping sound is");
-	sprintf(dsp_buff[2], "heard");
+	sprintf(dsp_buff[2], "heard...");
 	update_lcd();
 	
 	// Turn ON fan to prevent overheating
@@ -333,28 +365,24 @@ void perform_test(void)
 	clear_lcd();
 	sprintf(dsp_buff[0], "Test complete...");
 	sprintf(dsp_buff[1], "Rotate Knob until");
-	sprintf(dsp_buff[2], "beeping stops");
+	sprintf(dsp_buff[2], "beeping stops...");
 	update_lcd();
 	
-	/* Make buzzer beep until current is below 50A */
-	VPORTC.DIR |= PIN1_bm; // Set PC1 as output, make buzzer beep
-	
+	/* Make buzzer beep until current is below 50A */	
 	while (load_current_amps > 50)
 	{
 		load_current_amps = load_current_Read();
-		
-		VPORTC.OUT |= 0x02;	    // make PC1 output 1, make buzzer beep
-		_delay_ms(1000);	    // wait 1 seconds
-		VPORTC.OUT &= 0xFD;		// make PC1 output 0, make buzzer quiet
-		_delay_ms(1000);		// wait 1 seconds
+		buzzer_ON();		
+		_delay_ms(1000);	    // wait 1 second
+		buzzer_OFF();
+		_delay_ms(1000);		// wait 1 second
 	}
-	
+		
 	set_Fan_PWM(0);	// Turn fan OFF
 
-	// Proceed to next state -> display test results	
-	PB_PRESS = NONE;	// clear PB press
-	TEST_FSM_STATES = DISPLAY_RESULTS;	
-	display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+	// Proceed to next state -> display test results
+	TEST_CURRENT_STATE = DISPLAY_RESULTS;	
+	display_test_results(NONE, LOADED_battery_voltages, UNLOADED_battery_voltages);
 }
 //***************************************************************************
 //
@@ -365,28 +393,31 @@ void perform_test(void)
 //  It also updates the test state to save or discard the results of the 
 //  most recently completed test.
 //
-// Inputs : 2 4-element integer arrays
+// Inputs : 
+//		uint8_t LOADED_results[4]: loaded results to be displayed
+//		uint8_t UNLOADED_results[4]: unloaded results to be displayed
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void display_test_results(uint8_t LOADED_results[4], uint8_t UNLOADED_results[4])
+void display_test_results(PB_INPUT_TYPE pb_type, float LOADED_results[4], float UNLOADED_results[4])
 {
-	/* OK PB press to save results, BACK PB press to discard results*/
-	if (PB_PRESS == OK)
+	/* OK PB press to save results */
+	if (pb_type == OK)
 	{
-		PB_PRESS = NONE;	// clear PB press
 		// Proceed to next state -> save test results
-		TEST_FSM_STATES = SAVE_CURRENT_RESULTS;
-		save_test_results();
+		TEST_CURRENT_STATE = SAVE_CURRENT_RESULTS;
+		save_test_results(pb_type);
 	}
-	else if (PB_PRESS == BACK)
+	/* BACK PB press to discard results*/
+	else if (pb_type == BACK)
 	{
-		PB_PRESS = NONE;	// clear PB press
 		// Proceed to next state -> discard test results
-		TEST_FSM_STATES = DISCARD_RESULTS;
-		discard_test_results();
+		TEST_CURRENT_STATE = DISCARD_RESULTS;
+		discard_test_results(pb_type);
 	}
+	/* Display results otherwise */
 	else 
 	{
 		clear_lcd();
@@ -406,27 +437,27 @@ void display_test_results(uint8_t LOADED_results[4], uint8_t UNLOADED_results[4]
 //  the results of the most recently completed test. Also updates the 
 //  returns the program state to the main menu or to display results
 //
-// Inputs : none
+// Inputs : 
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void discard_test_results(void)
+void discard_test_results(PB_INPUT_TYPE pb_type)
 {	
 	/* OK PB press to discard results & return to main menu */
-	if (PB_PRESS == OK)
+	if (pb_type == OK)
 	{
-		PB_PRESS = NONE;	// clear PB press
 		LOCAL_INTERFACE_CURRENT_STATE = MAIN_MENU_STATE;
 		display_main_menu();
 	}
 	/* BACK PB press to go back to displaying current results*/
-	else if (PB_PRESS == BACK)
+	else if (pb_type == BACK)
 	{
-		PB_PRESS = NONE;	// clear PB press
-		TEST_FSM_STATES = DISPLAY_RESULTS;	
-		display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+		TEST_CURRENT_STATE = DISPLAY_RESULTS;	
+		display_test_results(NONE, LOADED_battery_voltages, UNLOADED_battery_voltages);
 	}
+	/* Otherwise display message */
 	else
 	{
 		clear_lcd();
@@ -447,28 +478,27 @@ void discard_test_results(void)
 //  state of the program to scroll through previous test results or
 //  to display the most recent test results
 //
-// Inputs : none
+// Inputs :
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void save_test_results(void)
+void save_test_results(PB_INPUT_TYPE pb_type)
 {
 	/* OK PB press to show entries to save results */
-	if (PB_PRESS == OK)
+	if (pb_type == OK)
 	{
-		PB_PRESS = NONE;	// clear PB press	
 		cursor = 1;		// Initialize cursor to line 1
 		quad_pack_entry = 0;	// Initialize quad pack entry to quad pack 1
-		TEST_FSM_STATES = SCROLL_SAVE_ENTRIES;
-		scroll_previous_entries();
+		TEST_CURRENT_STATE = SCROLL_SAVE_ENTRIES;
+		scroll_previous_entries(NONE);
 	}	
 	/* BACK PB press to go back to displaying current results*/
-	else if (PB_PRESS == BACK)
+	else if (pb_type == BACK)
 	{
-		PB_PRESS = NONE;	// clear PB press
-		TEST_FSM_STATES = DISPLAY_RESULTS;
-		display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+		TEST_CURRENT_STATE = DISPLAY_RESULTS;
+		display_test_results(NONE, LOADED_battery_voltages, UNLOADED_battery_voltages);
 	}
 	else
 	{
@@ -488,53 +518,52 @@ void save_test_results(void)
 //  previously saved tests. Responds differently to OK and BACK 
 //  PB presses depending on program state. 
 //
-// Inputs : none
+// Inputs :
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void scroll_previous_entries(void)
+void scroll_previous_entries(PB_INPUT_TYPE pb_type)
 {
-	switch (PB_PRESS)
+	switch (pb_type)
 	{
 		case UP: 
 			// Scroll up through quad pack entries
-			move_cursor_up();	
+			move_cursor_up();	// update cursor & update quad_pack_entry
 			display_quad_pack_entries();
 			break;
 		case DOWN: 
 			// Scroll down through quad pack entries
-			move_cursor_down();	
+			move_cursor_down();	// update cursor & update quad_pack_entry	
 			display_quad_pack_entries();
 			break;
 		case OK:
 			/* If in test state, OK overwrites previous data with current data */
 			if (LOCAL_INTERFACE_CURRENT_STATE == TEST_STATE)
 			{ 
-				PB_PRESS = NONE;	// clear PB press
-				TEST_FSM_STATES = OVERWRITE_RESULTS;
-				overwrite_previous_results();
+				TEST_CURRENT_STATE = OVERWRITE_RESULTS;
+				overwrite_previous_results(NONE);
 			}
 			/* If in viewing history state, OK displays results of entry pointed to by cursor */
 			else if (LOCAL_INTERFACE_CURRENT_STATE == VIEW_HISTORY_STATE)
 			{
-				PB_PRESS = NONE;	// clear PB press
 				VIEW_HISTORY_CURRENT_STATE = DISPLAY_PREVIOUS_RESULTS;
-				display_test_results(HISTORY_LOADED_battery_voltages[quad_pack_entry], HISTORY_UNLOADED_battery_voltages[quad_pack_entry]);
+				display_test_results(NONE, HISTORY_LOADED_battery_voltages[quad_pack_entry], HISTORY_UNLOADED_battery_voltages[quad_pack_entry]);
 			}
 			break;
 		case BACK:
 			/* If in test state, BACK returns to displaying test results */
 			if (LOCAL_INTERFACE_CURRENT_STATE == TEST_STATE)
 			{
-				PB_PRESS = NONE;	// clear PB press
-				TEST_FSM_STATES = DISPLAY_RESULTS;
-				display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+				TEST_CURRENT_STATE = DISPLAY_RESULTS;
+				display_test_results(NONE, LOADED_battery_voltages, UNLOADED_battery_voltages);
 			}
 			/* If viewing history, BACK returns to main menu */
 			else if (LOCAL_INTERFACE_CURRENT_STATE == VIEW_HISTORY_STATE)
 			{
-				PB_PRESS = NONE;	// clear PB press
+				cursor = 1;		// Initialize cursor to line 1
+				quad_pack_entry = 0;	// Initialize quad pack entry to quad pack 1
 				LOCAL_INTERFACE_CURRENT_STATE = MAIN_MENU_STATE;
 				display_main_menu();
 			}
@@ -553,26 +582,26 @@ void scroll_previous_entries(void)
 //  overwrite the results of a previous test and replace it with the results 
 //  of the most recently completed test. 
 //
-// Inputs : none
+// Inputs :
+//		PB_INPUT_TYPE pb_type: pushbutton input type
 //
 // Outputs : none
 //
 //**************************************************************************
-void overwrite_previous_results(void)
+void overwrite_previous_results(PB_INPUT_TYPE pb_type)
 {
 	/* OK pushbutton press to overwrite results and return to main menu */
-	if (PB_PRESS == OK)
+	if (pb_type == OK)
 	{
-		/* Copy current test results into history matrix rows pointed to by quad_pack_entry */		
+		/* Copy current test results into history matrix row pointed to by quad_pack_entry */		
 		for (uint8_t i = 0; i < 4; i++)
 		{
-			// Replace values from previous test with values from new test 
+			// Replace values from old test with values from new test 
 			HISTORY_UNLOADED_battery_voltages[quad_pack_entry][i] = UNLOADED_battery_voltages[i];
 			HISTORY_LOADED_battery_voltages[quad_pack_entry][i] = LOADED_battery_voltages[i];
 		}
 		
 		/* Return to main menu */
-		PB_PRESS = NONE;	// clear PB press
 		cursor = 1;		// Initialize cursor to line 1
 		quad_pack_entry = 0;	// Initialize quad pack entry to 1. Row index to 2D array, 0 is index to 1st entry
 		LOCAL_INTERFACE_CURRENT_STATE = MAIN_MENU_STATE;
@@ -581,10 +610,10 @@ void overwrite_previous_results(void)
     /* BACK pushbutton press to go back to displaying current results */
 	else if (PB_PRESS == BACK)
 	{
-		PB_PRESS = NONE;	// clear PB press
-		TEST_FSM_STATES = DISPLAY_RESULTS;	
-		display_test_results(LOADED_battery_voltages, UNLOADED_battery_voltages);
+		TEST_CURRENT_STATE = DISPLAY_RESULTS;	
+		display_test_results(NONE, LOADED_battery_voltages, UNLOADED_battery_voltages);
 	}
+	/* Display message otherwise */
 	else
 	{
 		clear_lcd();
@@ -610,7 +639,7 @@ void overwrite_previous_results(void)
 //**************************************************************************
 void move_cursor_up(void)
 {
-	// Only 2 lines in main menu
+	/* Only 2 lines in main menu */
 	if (LOCAL_INTERFACE_CURRENT_STATE == MAIN_MENU_STATE)
 		if (cursor == 1)
 			cursor = 2;
@@ -618,7 +647,7 @@ void move_cursor_up(void)
 			cursor = 1;
 	else
 	{
-		// Only 4 lines on LCD, user cannot scroll up beyond line 1
+		/* Only 4 lines on LCD, user cannot scroll up beyond line 1 */
 		if (cursor =! 1)
 			cursor--;
 	
@@ -644,7 +673,7 @@ void move_cursor_up(void)
 //**************************************************************************
 void move_cursor_down(void)
 {
-	// Only 2 lines in main menu
+	/* Only 2 lines in main menu */
 	if (LOCAL_INTERFACE_CURRENT_STATE == MAIN_MENU_STATE)
 		if (cursor == 1)
 			cursor = 2;
@@ -652,7 +681,7 @@ void move_cursor_down(void)
 			cursor = 1;
 	else	
 	{	
-		// Only 4 lines on LCD, user cannot scroll down beyond line 4
+		/* Only 4 lines on LCD, user cannot scroll down beyond line 4 */
 		if (cursor != 4)
 			cursor++;
 	
@@ -710,7 +739,7 @@ void display_quad_pack_entries(void)
 	/* Start on line 4 and display all entries BELOW the entry pointed to by the cursor */
 	while (entries_below_cursor != 0)
 	{
-		quad_pack_display = quad_pack_entry + entries_below_cursor + 1	// quad pack entry number on each line BELOW cursor
+		quad_pack_display = quad_pack_entry + entries_below_cursor + 1;	// quad pack entry number on each line BELOW cursor
 		
 		if (quad_pack_display < 1)
 			quad_pack_display += 13;	// If value is < 0, add 13 to ensure that display number 'rolls over' circularly
@@ -722,7 +751,7 @@ void display_quad_pack_entries(void)
 	/* Start on line 1 and display all entries ABOVE the entry pointed to by the cursor */
 	while (entries_above_cursor != 0)
 	{
-		quad_pack_display = quad_pack_entry - entries_above_cursor + 1	// quad pack entry number on each line ABOVE cursor
+		quad_pack_display = quad_pack_entry - entries_above_cursor + 1;	// quad pack entry number on each line ABOVE cursor
 		
 		if (quad_pack_display < 1)
 			quad_pack_display += 13;	// If value is < 0, add 13 to ensure that display number 'rolls over' circularly
@@ -735,31 +764,49 @@ void display_quad_pack_entries(void)
 }
 //***************************************************************************
 //
-// Function Name : "view_history_fsm"
+// Function Name : "buzzer_ON"
 // Target MCU : AVR128DB48
 // DESCRIPTION
-// View History finite state machine. This finite state machine is 
-// responsible for scrolling through and displaying previous test results.
-//
+// This function turns the buzzer ON to make a beep sound
 // Inputs : none
 //
 // Outputs : none
 //
 //**************************************************************************
-void view_history_fsm(void)
+void buzzer_ON(void)
 {
-	switch (VIEW_HISTORY_CURRENT_STATE)
-	{
-		case SCROLL_PREVIOUS_RESULTS:
-			scroll_previous_entries();
-			break;
-		case DISPLAY_PREVIOUS_RESULTS:
-			display_test_results(HISTORY_LOADED_battery_voltages[quad_pack_entry], HISTORY_UNLOADED_battery_voltages[quad_pack_entry]);
-			break;
-		default:
-			break;
-	}
-
-	PB_PRESS = NONE;	// Clear pushbutton state after it is handled
-	return;
+	VPORTC.DIR |= PIN1_bm;  // Set PC1 as output
+	VPORTC.OUT |= 0x02;	    // make PC1 output 1, make buzzer beep
 }
+//***************************************************************************
+//
+// Function Name : "buzzer_ON"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function turns the buzzer OFF to stop the beep sound
+// Inputs : none
+//
+// Outputs : none
+//	
+void buzzer_OFF(void)
+{
+	VPORTC.OUT &= 0xFD;		// make PC1 output 0, make buzzer quiet
+}
+
+//***************************************************************************
+//
+// Function Name : "PB_init"
+// Target MCU : AVR128DB48
+// DESCRIPTION
+// This function configures push button IO pins
+//
+// Inputs :
+//
+// Outputs : none
+//
+//**************************************************************************
+void PB_init(void)
+{
+	/* Configure push button IO pins */
+}
+
