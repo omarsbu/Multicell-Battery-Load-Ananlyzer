@@ -56,7 +56,7 @@ void test_fsm(void)
 			scroll_previous_entries(PB_PRESS);
 			break;
 		case OVERWRITE_RESULTS:
-			overwrite_previous_results(PB_PRESS);			/* Rewrite to store data in EEPROM */
+			overwrite_previous_results(PB_PRESS);			
 			break;
 		default:
 			break;
